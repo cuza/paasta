@@ -13,6 +13,7 @@
 # limitations under the License.
 import datetime
 
+import asynctest
 import mock
 import pytest
 
@@ -133,11 +134,14 @@ class TestKubernetesStatusV2:
             metadata=Struct(
                 owner_references=[Struct(kind="ReplicaSet", name="replicaset_1")],
                 name="pod_1",
+                namespace="paasta",
                 creation_timestamp=datetime.datetime(2021, 3, 6),
                 deletion_timestamp=None,
                 labels={
                     "paasta.yelp.com/git_sha": "aaa000",
                     "paasta.yelp.com/config_sha": "config000",
+                    "paasta.yelp.com/service": "service",
+                    "paasta.yelp.com/instance": "instance",
                 },
             ),
             status=Struct(
@@ -172,6 +176,7 @@ class TestKubernetesStatusV2:
                             failure_threshold=2,
                             period_seconds=3,
                             timeout_seconds=4,
+                            http_get=Struct(port=8080, path="/healthcheck",),
                         ),
                     )
                 ]
@@ -212,16 +217,19 @@ class TestKubernetesStatusV2:
 
         mock_load_service_namespace_config.return_value = {}
         mock_job_config.get_registrations.return_value = ["service.instance"]
-
-        status = pik.kubernetes_status_v2(
-            service="service",
-            instance="instance",
-            verbose=0,
-            include_smartstack=False,
-            include_envoy=False,
-            instance_type="kubernetes",
-            settings=mock.Mock(),
-        )
+        with asynctest.patch(
+            "paasta_tools.instance.kubernetes.get_pod_event_messages", autospec=True
+        ) as mock_get_pod_event_messages:
+            mock_get_pod_event_messages.return_value = []
+            status = pik.kubernetes_status_v2(
+                service="service",
+                instance="instance",
+                verbose=0,
+                include_smartstack=False,
+                include_envoy=False,
+                instance_type="kubernetes",
+                settings=mock.Mock(),
+            )
 
         assert status == {
             "app_name": mock_job_config.get_sanitised_deployment_name.return_value,
@@ -240,6 +248,8 @@ class TestKubernetesStatusV2:
                     "pods": [
                         {
                             "name": "pod_1",
+                            "service": "service",
+                            "instance": "instance",
                             "ip": "1.2.3.4",
                             "create_timestamp": datetime.datetime(
                                 2021, 3, 6
@@ -251,9 +261,13 @@ class TestKubernetesStatusV2:
                             "message": None,
                             "scheduled": True,
                             "ready": True,
+                            "events": [],
                             "containers": [
                                 {
                                     "healthcheck_grace_period": 1,
+                                    "healthcheck_cmd": {
+                                        "http_url": "http://1.2.3.4:8080/healthcheck"
+                                    },
                                     "name": "main_container",
                                     "restart_count": 0,
                                     "state": "running",
@@ -266,6 +280,11 @@ class TestKubernetesStatusV2:
                                     "timestamp": datetime.datetime(
                                         2021, 3, 6
                                     ).timestamp(),
+                                    "tail_lines": {
+                                        "error_message": "",
+                                        "stderr": [],
+                                        "stdout": [],
+                                    },
                                 },
                             ],
                         },
@@ -309,15 +328,19 @@ class TestKubernetesStatusV2:
         mock_pod.metadata.owner_references = []
         mock_pods_for_service_instance.return_value = [mock_pod]
 
-        status = pik.kubernetes_status_v2(
-            service="service",
-            instance="instance",
-            verbose=0,
-            include_smartstack=False,
-            include_envoy=False,
-            instance_type="kubernetes",
-            settings=mock.Mock(),
-        )
+        with asynctest.patch(
+            "paasta_tools.instance.kubernetes.get_pod_status", autospec=True
+        ) as mock_get_pod_status:
+            mock_get_pod_status.return_value = {}
+            status = pik.kubernetes_status_v2(
+                service="service",
+                instance="instance",
+                verbose=0,
+                include_smartstack=False,
+                include_envoy=False,
+                instance_type="kubernetes",
+                settings=mock.Mock(),
+            )
 
         assert len(status["versions"]) == 1
         assert status["versions"][0] == {
@@ -490,19 +513,26 @@ def test_filter_actually_running_replicasets():
     assert pik.filter_actually_running_replicasets(replicaset_list) == expected
 
 
-@mock.patch("paasta_tools.instance.kubernetes.get_pod_containers", autospec=True)
-@mock.patch("paasta_tools.kubernetes_tools.is_pod_scheduled", autospec=True)
-def test_get_pod_status_ready_with_backends(
-    mock_is_pod_scheduled, mock_get_pod_containers
-):
-    mock_get_pod_containers.return_value = []
-    mock_is_pod_scheduled.return_value = True
-    mock_pod = mock.MagicMock()
-    mock_pod.status.pod_ip = "1.2.3.4"
-    mock_ready_condition = mock.MagicMock()
-    mock_ready_condition.type = "Ready"
-    mock_ready_condition.status = "True"
-    mock_pod.status.conditions = [mock_ready_condition]
-    backends = [{"address": "0.0.0.0"}]
-    status = pik.get_pod_status(mock_pod, backends)
+def test_get_pod_status(event_loop):
+    with asynctest.patch(
+        "paasta_tools.instance.kubernetes.get_pod_containers", autospec=True
+    ) as mock_get_pod_containers, asynctest.patch(
+        "paasta_tools.kubernetes_tools.is_pod_scheduled", autospec=True
+    ) as mock_is_pod_scheduled, asynctest.patch(
+        "paasta_tools.kubernetes_tools.get_pod_event_messages", autospec=True
+    ) as mock_get_pod_event_messages:
+        mock_get_pod_containers.return_value = []
+        mock_get_pod_event_messages.return_value = []
+        mock_is_pod_scheduled.return_value = True
+        mock_pod = mock.MagicMock()
+        mock_pod.status.pod_ip = "1.2.3.4"
+        mock_ready_condition = mock.MagicMock()
+        mock_ready_condition.type = "Ready"
+        mock_ready_condition.status = "True"
+        mock_kube_client = mock.MagicMock()
+        mock_pod.status.conditions = [mock_ready_condition]
+        backends = [{"address": "0.0.0.0"}]
+        status = event_loop.run_until_complete(
+            pik.get_pod_status(mock_pod, backends, mock_kube_client, 10)
+        )
     assert not status["ready"]

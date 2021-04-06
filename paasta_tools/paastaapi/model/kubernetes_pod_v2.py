@@ -32,7 +32,9 @@ from paasta_tools.paastaapi.model_utils import (  # noqa: F401
 
 def lazy_import():
     from paasta_tools.paastaapi.model.kubernetes_container_v2 import KubernetesContainerV2
+    from paasta_tools.paastaapi.model.kubernetes_pod_event import KubernetesPodEvent
     globals()['KubernetesContainerV2'] = KubernetesContainerV2
+    globals()['KubernetesPodEvent'] = KubernetesPodEvent
 
 
 class KubernetesPodV2(ModelNormal):
@@ -93,6 +95,7 @@ class KubernetesPodV2(ModelNormal):
             'scheduled': (bool,),  # noqa: E501
             'reason': (str, none_type,),  # noqa: E501
             'message': (str, none_type,),  # noqa: E501
+            'events': ([KubernetesPodEvent],),  # noqa: E501
             'containers': ([KubernetesContainerV2],),  # noqa: E501
         }
 
@@ -114,6 +117,7 @@ class KubernetesPodV2(ModelNormal):
         'scheduled': 'scheduled',  # noqa: E501
         'reason': 'reason',  # noqa: E501
         'message': 'message',  # noqa: E501
+        'events': 'events',  # noqa: E501
         'containers': 'containers',  # noqa: E501
     }
 
@@ -175,6 +179,7 @@ class KubernetesPodV2(ModelNormal):
             scheduled (bool): Whether or not the pod is scheduled. [optional]  # noqa: E501
             reason (str, none_type): brief description of the pod&#39;s state. [optional]  # noqa: E501
             message (str, none_type): short message with details about the pod&#39;s state. [optional]  # noqa: E501
+            events ([KubernetesPodEvent]): Kubernetes pod events. [optional]  # noqa: E501
             containers ([KubernetesContainerV2]): [optional]  # noqa: E501
         """
 

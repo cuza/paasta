@@ -1167,10 +1167,7 @@ def print_kubernetes_status_v2(
     )
 
     if verbose > 1:
-        as_table = get_autoscaling_table(status.autoscaling_status, verbose)
-        print(f"autoscaling table:")
-        print(as_table)
-        output.extend(as_table)
+        output.extend(get_autoscaling_table(status.autoscaling_status, verbose))
 
     if status.error_message:
         output.append("    " + PaastaColors.red(status.error_message))
@@ -1227,8 +1224,6 @@ def get_versions_table(
             show_config_sha = True
         else:
             show_config_sha = False
-
-        print(f"show_config_sha: {show_config_sha}, verbose: {verbose})")
 
         table: List[str] = []
         table.extend(
@@ -1324,6 +1319,13 @@ class ReplicaState(Enum):
 
 
 def get_replica_state(pod: KubernetesPodV2) -> ReplicaState:
+    def recent_liveness_failure(events: List[Dict[str, Any]]) -> bool:
+        if not events:
+            return False
+        return any(
+            [evt for evt in events if "Liveness probe failed" in evt.get("message", "")]
+        )
+
     phase = pod.phase
     state = ReplicaState.UNKNOWN
     if phase is None or not pod.scheduled:
@@ -1355,11 +1357,20 @@ def get_replica_state(pod: KubernetesPodV2) -> ReplicaState:
                         > datetime.utcnow().timestamp()
                     ):
                         state = ReplicaState.WARMING_UP
-                    else:
+                    elif recent_liveness_failure(pod.events):
                         state = ReplicaState.HEALTHCHECK_FAILING
+                    elif main_container.state != "running":
+                        state = ReplicaState.UNHEALTHY
+                    else:
+                        print("Restarts and healthcheck?")
+                        print(pod.events)
+                        state = ReplicaState.UNKNOWN
                 else:
                     # No restarts yet, still warming up?
                     state = ReplicaState.WARMING_UP
+            else:
+                print("No main container!??!")
+                state = ReplicaState.UNKNOWN
         else:
             state = ReplicaState.RUNNING
     elif phase == "Failed":
@@ -1407,7 +1418,7 @@ def create_replica_table(
                 )
                 humanized_timestamp = humanize.naturaltime(timestamp)
                 if c.restart_count > 0:
-                    if c.state != "running" or c.last_reason == "CrashLoopBackOff":
+                    if c.state != "running" or c.reason == "CrashLoopBackOff":
                         if verbose > 1:
                             table.append(
                                 PaastaColors.red(
@@ -1426,18 +1437,32 @@ def create_replica_table(
                             ]
                         )
             if state == ReplicaState.HEALTHCHECK_FAILING and c.healthcheck_cmd:
+                healthcheck_string = (
+                    "check your healthcheck configuration in yelpsoa_configs"
+                )
+                if c.healthcheck_cmd.http_url:
+                    healthcheck_string = f"run `curl {c.healthcheck_cmd.http_url}`"
+                elif c.healthcheck_cmd.tcp_port:
+                    healthcheck_string = f"verify your service is listening on {c.healthcheck_cmd.tcp_port}"
+                elif c.healthcheck_cmd.cmd:
+                    healthcheck_string = f"check why the following may be failing: `{c.healthcheck_cmd.cmd}`"
                 table.append(
-                    PaastaColors.red(
-                        f"  To test healthcheck directly, {c.healthcheck_cmd}"
-                    )
+                    PaastaColors.red(f"  To investigate further, {healthcheck_string}")
                 )
             else:
-                # TODO: Specify full paasta logs cmd once pod filtering is available
-                table.append(
-                    PaastaColors.red(
-                        f"  Consider checking logs with `paasta logs -s {pod.service} -p {pod.name}`"
+                if verbose < 2:
+                    table.append(
+                        PaastaColors.red(
+                            f"  Consider checking logs with `paasta logs -s {pod.service} -i {pod.instance} -p {pod.name}`"
+                        )
                     )
-                )
+                else:
+                    if len(pod.containers) > 0:
+                        table.extend(
+                            format_tail_lines_for_kubernetes_pod(
+                                pod.containers, pod.name
+                            )
+                        )
         elif state == ReplicaState.UNSCHEDULED:
             if pod.reason == "Unschedulable":
                 table.append(PaastaColors.red(f"  Pod is unschedulable: {pod.message}"))

@@ -1287,8 +1287,6 @@ class TestGetInstanceState:
 
 
 class TestGetVersionsTable:
-    # TODO: Add replica table coverage
-
     @pytest.fixture
     def mock_replicasets(self):
         replicaset_1 = paastamodels.KubernetesVersion(
@@ -1298,6 +1296,8 @@ class TestGetVersionsTable:
             pods=[
                 paastamodels.KubernetesPodV2(
                     name="pod1",
+                    service="service",
+                    instance="instance",
                     ip="1.2.3.4",
                     host="w.x.y.z",
                     create_timestamp=float(datetime.datetime(2021, 3, 5).timestamp()),
@@ -1308,6 +1308,8 @@ class TestGetVersionsTable:
                 ),
                 paastamodels.KubernetesPodV2(
                     name="pod2",
+                    service="service",
+                    instance="instance",
                     ip="1.2.3.5",
                     host="a.b.c.d",
                     create_timestamp=float(datetime.datetime(2021, 3, 3).timestamp()),
@@ -1327,6 +1329,8 @@ class TestGetVersionsTable:
             pods=[
                 paastamodels.KubernetesPodV2(
                     name="pod1",
+                    service="service",
+                    instance="instance",
                     ip="1.2.3.6",
                     host="a.b.c.d",
                     create_timestamp=float(datetime.datetime(2021, 3, 1).timestamp()),
@@ -1339,6 +1343,23 @@ class TestGetVersionsTable:
         )
         # in reverse order to ensure we are sorting
         return [replicaset_2, replicaset_1]
+
+    @pytest.fixture
+    def mock_container(self):
+        container = paastamodels.KubernetesContainerV2(
+            name="main",
+            state="waiting",
+            reason="CrashLoopBackOff",
+            healthcheck_cmd=paastamodels.KubernetesHealthcheck(
+                http_url="http://1.2.3.5:8888/healthcheck"
+            ),
+            restart_count=100,
+            healthcheck_grace_period=0,
+            tail_lines=paastamodels.TaskTailLines(
+                stdout=["stdout 1", "stdout 2"], stderr=[], error_message="",
+            ),
+        )
+        return container
 
     def test_two_replicasets(self, mock_replicasets):
         versions_table = get_versions_table(mock_replicasets, verbose=0)
@@ -1364,7 +1385,69 @@ class TestGetVersionsTable:
         versions_table_tip = remove_ansi_escape_sequences(versions_table[4])
         assert "1.2.3.5" in versions_table[3]
         assert "Evicted: Not enough memory!" in versions_table_tip
-        assert "1.2.3.6" in versions_table[10]
+        assert "1.2.3.6" in versions_table[9]
+
+    def test_healthcheck_tip(self, mock_replicasets):
+        # Change evicted version to healthcheck failing
+        mock_replicasets[1].pods[1].phase = "Running"
+        mock_replicasets[1].pods[1].ready = False
+        mock_replicasets[1].pods[1].events = [
+            paastamodels.KubernetesPodEvent(
+                message="Liveness probe failed:", time_stamp="2021-03-03 00:00:00"
+            )
+        ]
+        mock_replicasets[1].pods[1].containers.append(
+            paastamodels.KubernetesContainerV2(
+                name="main",
+                state="waiting",
+                reason="CrashLoopBackOff",
+                healthcheck_cmd=paastamodels.KubernetesHealthcheck(
+                    http_url="http://1.2.3.5:8888/healthcheck"
+                ),
+                restart_count=100,
+                healthcheck_grace_period=0,
+            )
+        )
+        versions_table = get_versions_table(mock_replicasets, verbose=2)
+        assert any(
+            ["curl http://1.2.3.5:8888/healthcheck" in row for row in versions_table]
+        )
+        assert any(
+            [
+                "1 Healthcheck Failing" in remove_ansi_escape_sequences(row)
+                for row in versions_table
+            ]
+        )
+
+    def test_unschedulable(self, mock_replicasets):
+        mock_replicasets[1].pods[0].phase = "Pending"
+        mock_replicasets[1].pods[0].scheduled = False
+        mock_replicasets[1].pods[0].reason = "Unschedulable"
+        mock_replicasets[1].pods[0].message = "0/50 nodes matched tolerations"
+
+        versions_table = get_versions_table(mock_replicasets, verbose=1)
+        assert any(
+            [
+                "Pod is unschedulable: 0/50 nodes matched tolerations" in row
+                for row in versions_table
+            ]
+        )
+
+    def test_paasta_logs(self, mock_replicasets, mock_container):
+        mock_replicasets[1].pods[1].containers = [mock_container]
+        mock_replicasets[1].pods[1].phase = "Running"
+        mock_replicasets[1].pods[1].ready = False
+        versions_table = get_versions_table(mock_replicasets, verbose=1)
+        assert all(["stdout 1" not in row for row in versions_table])
+        assert any(
+            [
+                "Consider checking logs with `paasta logs -s service -i instance -p pod2`"
+                not in row
+                for row in versions_table
+            ]
+        )
+        verbose_versions_table = get_versions_table(mock_replicasets, verbose=2)
+        assert any(["stdout 1" in row for row in verbose_versions_table])
 
 
 class TestPrintKubernetesStatus:

@@ -31,7 +31,9 @@ from paasta_tools.paastaapi.model_utils import (  # noqa: F401
 )
 
 def lazy_import():
+    from paasta_tools.paastaapi.model.kubernetes_healthcheck import KubernetesHealthcheck
     from paasta_tools.paastaapi.model.task_tail_lines import TaskTailLines
+    globals()['KubernetesHealthcheck'] = KubernetesHealthcheck
     globals()['TaskTailLines'] = TaskTailLines
 
 
@@ -91,8 +93,8 @@ class KubernetesContainerV2(ModelNormal):
             'last_message': (str, none_type,),  # noqa: E501
             'last_duration': (float, none_type,),  # noqa: E501
             'timestamp': (float, none_type,),  # noqa: E501
-            'healthcheck_grace_period': (float, none_type,),  # noqa: E501
-            'healthcheck_cmd': (str, none_type,),  # noqa: E501
+            'healthcheck_grace_period': (int,),  # noqa: E501
+            'healthcheck_cmd': (KubernetesHealthcheck,),  # noqa: E501
             'tail_lines': (TaskTailLines,),  # noqa: E501
         }
 
@@ -173,8 +175,8 @@ class KubernetesContainerV2(ModelNormal):
             last_message (str, none_type): Details about state of container. [optional]  # noqa: E501
             last_duration (float, none_type): Duration in seconds of previous state. [optional]  # noqa: E501
             timestamp (float, none_type): Unix timestamp at which current state began. [optional]  # noqa: E501
-            healthcheck_grace_period (float, none_type): Time in seconds for healthcheck grace period. [optional]  # noqa: E501
-            healthcheck_cmd (str, none_type): Command that can be used to test liveness probe of this container. [optional]  # noqa: E501
+            healthcheck_grace_period (int): Time in seconds for healthcheck grace period, 0 otherwise. [optional]  # noqa: E501
+            healthcheck_cmd (KubernetesHealthcheck): [optional]  # noqa: E501
             tail_lines (TaskTailLines): [optional]  # noqa: E501
         """
 
