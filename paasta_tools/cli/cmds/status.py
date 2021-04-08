@@ -1351,25 +1351,19 @@ def get_replica_state(pod: KubernetesPodV2) -> ReplicaState:
                 None,
             )
             if main_container:
-                if main_container.restart_count > 0:
-                    if (
-                        pod.create_timestamp + main_container.healthcheck_grace_period
-                        > datetime.utcnow().timestamp()
-                    ):
-                        state = ReplicaState.WARMING_UP
-                    elif recent_liveness_failure(pod.events):
+                if (
+                    pod.create_timestamp + main_container.healthcheck_grace_period
+                    > datetime.utcnow().timestamp()
+                ):
+                    state = ReplicaState.WARMING_UP
+                elif main_container.restart_count > 0:
+                    if recent_liveness_failure(pod.events):
                         state = ReplicaState.HEALTHCHECK_FAILING
                     elif main_container.state != "running":
                         state = ReplicaState.UNHEALTHY
                     else:
-                        print("Restarts and healthcheck?")
-                        print(pod.events)
                         state = ReplicaState.UNKNOWN
-                else:
-                    # No restarts yet, still warming up?
-                    state = ReplicaState.WARMING_UP
             else:
-                print("No main container!??!")
                 state = ReplicaState.UNKNOWN
         else:
             state = ReplicaState.RUNNING
