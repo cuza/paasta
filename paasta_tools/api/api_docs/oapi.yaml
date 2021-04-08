@@ -264,7 +264,7 @@ components:
               description: timestamp of last autoscale
               type: string
             max_instances:
-              description: min_instances as specified in yelpsoa_configs
+              description: max_instances as specified in yelpsoa_configs
               type: integer
             metrics:
               description: Current metrics
@@ -366,7 +366,7 @@ components:
               description: timestamp of last autoscale
               type: string
             max_instances:
-              description: min_instances as specified in yelpsoa_configs
+              description: max_instances as specified in yelpsoa_configs
               type: integer
             metrics:
               description: Current metrics

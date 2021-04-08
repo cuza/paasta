@@ -1432,7 +1432,7 @@ def create_replica_table(
                                     f"  OOM Killed at {humanized_timestamp}.  {c.restart_count} restarts since starting"
                                 ),
                                 PaastaColors.red(
-                                    f"  Check y/{pod.service}_load and consider increasing memory in yelpsoa_configs"
+                                    f"  Check y/check-oom-events and consider increasing memory in yelpsoa_configs"
                                 ),
                             ]
                         )

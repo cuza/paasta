@@ -2587,7 +2587,7 @@ async def get_all_events_for_service(
         key=lambda x: (
             getattr(x, "last_timestamp")
             or getattr(x, "event_time")
-            or getattr(x, "first_imestamp")
+            or getattr(x, "first_timestamp")
             or 0  # prevent errors in case none of the fields exist
         ),
     )
