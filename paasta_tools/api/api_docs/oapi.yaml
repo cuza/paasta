@@ -653,13 +653,6 @@ components:
         name:
           description: Pod name
           type: string
-        service:
-          description: Service this pod belongs to
-          type: string
-        instance:
-          description: Instance this pod belongs to
-
-          type: string
         ip:
           description: Pod IP
           type: string

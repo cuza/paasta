@@ -1163,7 +1163,10 @@ def print_kubernetes_status_v2(
             )
         )
     output.extend(
-        [f"      {line}" for line in get_versions_table(status.versions, verbose)]
+        [
+            f"      {line}"
+            for line in get_versions_table(status.versions, service, instance, verbose)
+        ]
     )
 
     if verbose > 1:
@@ -1210,13 +1213,13 @@ def get_instance_state(status: InstanceStatusKubernetesV2) -> str:
 
 
 def get_versions_table(
-    versions: List[KubernetesVersion], verbose: int = 0,
+    versions: List[KubernetesVersion], service: str, instance: str, verbose: int = 0,
 ) -> List[str]:
     # TODO: why are replicasets w/ 0 desired pods still listed
     if len(versions) == 0:
         return [PaastaColors.red("There are no running versions for this instance")]
     elif len(versions) == 1:
-        return get_version_table_entry(versions[0], verbose=verbose)
+        return get_version_table_entry(versions[0], service, instance, verbose=verbose)
     else:
         versions = sorted(versions, key=lambda x: x.create_timestamp, reverse=True)
         config_shas = {v.config_sha for v in versions}
@@ -1229,6 +1232,8 @@ def get_versions_table(
         table.extend(
             get_version_table_entry(
                 versions[0],
+                service,
+                instance,
                 version_name_suffix="new",
                 show_config_sha=show_config_sha,
                 verbose=verbose,
@@ -1238,6 +1243,8 @@ def get_versions_table(
             table.extend(
                 get_version_table_entry(
                     version,
+                    service,
+                    instance,
                     version_name_suffix="old",
                     show_config_sha=show_config_sha,
                     verbose=verbose,
@@ -1248,6 +1255,8 @@ def get_versions_table(
 
 def get_version_table_entry(
     version: KubernetesVersion,
+    service: str,
+    instance: str,
     version_name_suffix: str = None,
     show_config_sha: bool = False,
     verbose: int = 0,
@@ -1281,11 +1290,15 @@ def get_version_table_entry(
             ]
             if unhealthy_replicas:
                 entry.append(f"    Unhealthy Replicas:")
-                replica_table = create_replica_table(unhealthy_replicas, verbose)
+                replica_table = create_replica_table(
+                    unhealthy_replicas, service, instance, verbose
+                )
                 for line in replica_table:
                     entry.append(f"      {line}")
         else:
-            replica_table = create_replica_table(replica_states, verbose)
+            replica_table = create_replica_table(
+                replica_states, service, instance, verbose
+            )
             for line in replica_table:
                 entry.append(f"    {line}")
     return entry
@@ -1381,7 +1394,10 @@ def get_replica_states(
 
 
 def create_replica_table(
-    pods: List[Tuple[ReplicaState, KubernetesPodV2]], verbose: int = 0,
+    pods: List[Tuple[ReplicaState, KubernetesPodV2]],
+    service: str,
+    instance: str,
+    verbose: int = 0,
 ) -> List[str]:
     header = ["ID", "IP/Port", "Host deployed to", "Started at what localtime", "State"]
     table: List[Union[List[str], str]] = [header]
@@ -1447,7 +1463,7 @@ def create_replica_table(
                 if verbose < 2:
                     table.append(
                         PaastaColors.red(
-                            f"  Consider checking logs with `paasta logs -s {pod.service} -i {pod.instance} -p {pod.name}`"
+                            f"  Consider checking logs with `paasta logs -s {service} -i {instance} -p {pod.name}`"
                         )
                     )
                 else:

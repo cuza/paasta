@@ -248,8 +248,6 @@ class TestKubernetesStatusV2:
                     "pods": [
                         {
                             "name": "pod_1",
-                            "service": "service",
-                            "instance": "instance",
                             "ip": "1.2.3.4",
                             "create_timestamp": datetime.datetime(
                                 2021, 3, 6

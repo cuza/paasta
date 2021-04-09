@@ -1245,6 +1245,9 @@ class TestPrintKubernetesStatusV2:
         )
         joined_output = "\n".join(output)
         assert f"State: {mock_get_instance_state.return_value}" in joined_output
+        mock_get_versions_table.assert_called_once_with(
+            mock.ANY, "service", "instance", 0
+        )
         for table_entry in mock_versions_table:
             assert table_entry in joined_output
 
@@ -1296,8 +1299,6 @@ class TestGetVersionsTable:
             pods=[
                 paastamodels.KubernetesPodV2(
                     name="pod1",
-                    service="service",
-                    instance="instance",
                     ip="1.2.3.4",
                     host="w.x.y.z",
                     create_timestamp=float(datetime.datetime(2021, 3, 5).timestamp()),
@@ -1308,8 +1309,6 @@ class TestGetVersionsTable:
                 ),
                 paastamodels.KubernetesPodV2(
                     name="pod2",
-                    service="service",
-                    instance="instance",
                     ip="1.2.3.5",
                     host="a.b.c.d",
                     create_timestamp=float(datetime.datetime(2021, 3, 3).timestamp()),
@@ -1329,8 +1328,6 @@ class TestGetVersionsTable:
             pods=[
                 paastamodels.KubernetesPodV2(
                     name="pod1",
-                    service="service",
-                    instance="instance",
                     ip="1.2.3.6",
                     host="a.b.c.d",
                     create_timestamp=float(datetime.datetime(2021, 3, 1).timestamp()),
@@ -1362,7 +1359,9 @@ class TestGetVersionsTable:
         return container
 
     def test_two_replicasets(self, mock_replicasets):
-        versions_table = get_versions_table(mock_replicasets, verbose=0)
+        versions_table = get_versions_table(
+            mock_replicasets, "service", "instance", verbose=0
+        )
 
         assert "aabbccdd (new)" in versions_table[0]
         assert "2021-03-03" in versions_table[0]
@@ -1376,12 +1375,16 @@ class TestGetVersionsTable:
 
     def test_different_config_shas(self, mock_replicasets):
         mock_replicasets[0].config_sha = "config111"
-        versions_table = get_versions_table(mock_replicasets, verbose=0)
+        versions_table = get_versions_table(
+            mock_replicasets, "service", "instance", verbose=0
+        )
         assert "aabbccdd, config000" in versions_table[0]
         assert "ff112233, config111" in versions_table[7]
 
     def test_full_replica_table(self, mock_replicasets):
-        versions_table = get_versions_table(mock_replicasets, verbose=2)
+        versions_table = get_versions_table(
+            mock_replicasets, "service", "instance", verbose=2
+        )
         versions_table_tip = remove_ansi_escape_sequences(versions_table[4])
         assert "1.2.3.5" in versions_table[3]
         assert "Evicted: Not enough memory!" in versions_table_tip
@@ -1408,7 +1411,9 @@ class TestGetVersionsTable:
                 healthcheck_grace_period=0,
             )
         )
-        versions_table = get_versions_table(mock_replicasets, verbose=2)
+        versions_table = get_versions_table(
+            mock_replicasets, "service", "instance", verbose=2
+        )
         assert any(
             ["curl http://1.2.3.5:8888/healthcheck" in row for row in versions_table]
         )
@@ -1425,7 +1430,9 @@ class TestGetVersionsTable:
         mock_replicasets[1].pods[0].reason = "Unschedulable"
         mock_replicasets[1].pods[0].message = "0/50 nodes matched tolerations"
 
-        versions_table = get_versions_table(mock_replicasets, verbose=1)
+        versions_table = get_versions_table(
+            mock_replicasets, "service", "instance", verbose=1
+        )
         assert any(
             [
                 "Pod is unschedulable: 0/50 nodes matched tolerations" in row
@@ -1440,14 +1447,18 @@ class TestGetVersionsTable:
             paastamodels.KubernetesContainerV2(name="hacheck", state="running",)
         )
 
-        versions_table = get_versions_table(mock_replicasets, verbose=1)
+        versions_table = get_versions_table(
+            mock_replicasets, "service", "instance", verbose=1
+        )
         assert any(["please try again" in row for row in versions_table])
 
     def test_paasta_logs(self, mock_replicasets, mock_container):
         mock_replicasets[1].pods[1].containers = [mock_container]
         mock_replicasets[1].pods[1].phase = "Running"
         mock_replicasets[1].pods[1].ready = False
-        versions_table = get_versions_table(mock_replicasets, verbose=1)
+        versions_table = get_versions_table(
+            mock_replicasets, "service", "instance", verbose=1
+        )
         assert all(["stdout 1" not in row for row in versions_table])
         assert any(
             [
@@ -1456,7 +1467,9 @@ class TestGetVersionsTable:
                 for row in versions_table
             ]
         )
-        verbose_versions_table = get_versions_table(mock_replicasets, verbose=2)
+        verbose_versions_table = get_versions_table(
+            mock_replicasets, "service", "instance", verbose=2
+        )
         assert any(["stdout 1" in row for row in verbose_versions_table])
 
 

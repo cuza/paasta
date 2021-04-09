@@ -634,8 +634,6 @@ async def get_pod_status(
 
     return {
         "name": pod.metadata.name,
-        "service": pod.metadata.labels.get("paasta.yelp.com/service", "Unknown"),
-        "instance": pod.metadata.labels.get("paasta.yelp.com/instance", "Unknown"),
         "ip": pod.status.pod_ip,
         "host": pod.status.host_ip,
         "phase": pod.status.phase,
