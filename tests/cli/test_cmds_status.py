@@ -1433,6 +1433,16 @@ class TestGetVersionsTable:
             ]
         )
 
+    def test_unknown_no_main_container(self, mock_replicasets):
+        mock_replicasets[1].pods[0].phase = "Running"
+        mock_replicasets[1].pods[0].ready = False
+        mock_replicasets[1].pods[0].containers.append(
+            paastamodels.KubernetesContainerV2(name="hacheck", state="running",)
+        )
+
+        versions_table = get_versions_table(mock_replicasets, verbose=1)
+        assert any(["please try again" in row for row in versions_table])
+
     def test_paasta_logs(self, mock_replicasets, mock_container):
         mock_replicasets[1].pods[1].containers = [mock_container]
         mock_replicasets[1].pods[1].phase = "Running"

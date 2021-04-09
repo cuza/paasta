@@ -1351,18 +1351,21 @@ def get_replica_state(pod: KubernetesPodV2) -> ReplicaState:
                 None,
             )
             if main_container:
-                if (
+                warming_up = (
                     pod.create_timestamp + main_container.healthcheck_grace_period
                     > datetime.utcnow().timestamp()
-                ):
-                    state = ReplicaState.WARMING_UP
-                elif main_container.restart_count > 0:
+                )
+                if main_container.restart_count > 0:
                     if recent_liveness_failure(pod.events):
                         state = ReplicaState.HEALTHCHECK_FAILING
+                    elif warming_up:
+                        state = ReplicaState.WARMING_UP
                     elif main_container.state != "running":
                         state = ReplicaState.UNHEALTHY
                     else:
                         state = ReplicaState.UNKNOWN
+                elif warming_up:
+                    state = ReplicaState.WARMING_UP
             else:
                 state = ReplicaState.UNKNOWN
         else:
@@ -1413,12 +1416,11 @@ def create_replica_table(
                 humanized_timestamp = humanize.naturaltime(timestamp)
                 if c.restart_count > 0:
                     if c.state != "running" or c.reason == "CrashLoopBackOff":
-                        if verbose > 1:
-                            table.append(
-                                PaastaColors.red(
-                                    f"  Restarted at {humanized_timestamp}. {c.restart_count} restarts since starting"
-                                )
+                        table.append(
+                            PaastaColors.red(
+                                f"  Restarted at {humanized_timestamp}. {c.restart_count} restarts since starting"
                             )
+                        )
                     if c.reason == "OOMKilled":
                         table.extend(
                             [
@@ -1460,6 +1462,12 @@ def create_replica_table(
         elif state == ReplicaState.UNSCHEDULED:
             if pod.reason == "Unschedulable":
                 table.append(PaastaColors.red(f"  Pod is unschedulable: {pod.message}"))
+        elif state == ReplicaState.UNKNOWN:
+            table.append(
+                PaastaColors.red(
+                    f"  Cannot determine pod state, please try again. If you continue to see this state, please contact #paasta"
+                )
+            )
     return format_table(table)
 
 

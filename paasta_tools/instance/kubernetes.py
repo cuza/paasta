@@ -451,7 +451,8 @@ def kubernetes_status_v2(
         return status
 
     if (
-        job_config.is_autoscaling_enabled() is True
+        verbose > 1
+        and job_config.is_autoscaling_enabled() is True
         and job_config.get_autoscaling_params().get("decision_policy", "") != "bespoke"  # type: ignore
     ):
         try:
