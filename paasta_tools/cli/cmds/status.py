@@ -1362,8 +1362,6 @@ def get_replica_state(pod: KubernetesPodV2) -> ReplicaState:
                         state = ReplicaState.WARMING_UP
                     elif main_container.state != "running":
                         state = ReplicaState.UNHEALTHY
-                    else:
-                        state = ReplicaState.UNKNOWN
                 elif warming_up:
                     state = ReplicaState.WARMING_UP
             else:
