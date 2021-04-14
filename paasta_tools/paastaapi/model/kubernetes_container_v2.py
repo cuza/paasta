@@ -92,6 +92,7 @@ class KubernetesContainerV2(ModelNormal):
             'last_reason': (str, none_type,),  # noqa: E501
             'last_message': (str, none_type,),  # noqa: E501
             'last_duration': (float, none_type,),  # noqa: E501
+            'last_timestamp': (float, none_type,),  # noqa: E501
             'timestamp': (float, none_type,),  # noqa: E501
             'healthcheck_grace_period': (int,),  # noqa: E501
             'healthcheck_cmd': (KubernetesHealthcheck,),  # noqa: E501
@@ -113,6 +114,7 @@ class KubernetesContainerV2(ModelNormal):
         'last_reason': 'last_reason',  # noqa: E501
         'last_message': 'last_message',  # noqa: E501
         'last_duration': 'last_duration',  # noqa: E501
+        'last_timestamp': 'last_timestamp',  # noqa: E501
         'timestamp': 'timestamp',  # noqa: E501
         'healthcheck_grace_period': 'healthcheck_grace_period',  # noqa: E501
         'healthcheck_cmd': 'healthcheck_cmd',  # noqa: E501
@@ -174,6 +176,7 @@ class KubernetesContainerV2(ModelNormal):
             last_reason (str, none_type): Short description of the previous state of container. [optional]  # noqa: E501
             last_message (str, none_type): Details about state of container. [optional]  # noqa: E501
             last_duration (float, none_type): Duration in seconds of previous state. [optional]  # noqa: E501
+            last_timestamp (float, none_type): Unix timestamp at which last state began. [optional]  # noqa: E501
             timestamp (float, none_type): Unix timestamp at which current state began. [optional]  # noqa: E501
             healthcheck_grace_period (int): Time in seconds for healthcheck grace period, 0 otherwise. [optional]  # noqa: E501
             healthcheck_cmd (KubernetesHealthcheck): [optional]  # noqa: E501

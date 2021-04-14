@@ -259,6 +259,7 @@ class TestKubernetesStatusV2:
                             "message": None,
                             "scheduled": True,
                             "ready": True,
+                            "mesh_ready": None,
                             "events": [],
                             "containers": [
                                 {
@@ -275,6 +276,7 @@ class TestKubernetesStatusV2:
                                     "last_reason": None,
                                     "last_message": None,
                                     "last_duration": None,
+                                    "last_timestamp": None,
                                     "timestamp": datetime.datetime(
                                         2021, 3, 6
                                     ).timestamp(),
@@ -533,4 +535,5 @@ def test_get_pod_status(event_loop):
         status = event_loop.run_until_complete(
             pik.get_pod_status(mock_pod, backends, mock_kube_client, 10)
         )
-    assert not status["ready"]
+    assert status["ready"]
+    assert not status["mesh_ready"]

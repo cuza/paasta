@@ -1993,8 +1993,10 @@ async def get_tail_lines_for_kubernetes_container(
     return tail_lines
 
 
-async def get_pod_event_messages(kube_client: KubeClient, pod: V1Pod) -> List[Dict]:
-    pod_events = await get_events_for_object(kube_client, pod, "Pod")
+async def get_pod_event_messages(
+    kube_client: KubeClient, pod: V1Pod, max_age: int = 0
+) -> List[Dict]:
+    pod_events = await get_events_for_object(kube_client, pod, "Pod", max_age)
     pod_event_messages = []
     if pod_events:
         for event in pod_events:
@@ -2012,7 +2014,7 @@ def format_pod_event_messages(
     rows: List[str] = list()
     rows.append(PaastaColors.blue(f"Pod Events for {pod_name}"))
     for message in pod_event_messages:
-        timestamp = message.get("timeStamp", "unknown time")
+        timestamp = message.get("time_stamp", "unknown time")
         message_text = message.get("message", "")
         rows.append(f"   Event at {timestamp}: {message_text}")
     return rows
@@ -2522,11 +2524,21 @@ def update_stateful_set(
     )
 
 
+def get_event_timestamp(event: V1Event) -> Optional[float]:
+    # Cycle through timestamp attributes in order of preference
+    for ts_attr in ["last_timestamp", "event_time", "first_timestamp"]:
+        ts = getattr(event, ts_attr)
+        if ts:
+            return ts.timestamp()
+    return None
+
+
 @async_timeout()
 async def get_events_for_object(
     kube_client: KubeClient,
     obj: Union[V1Pod, V1Deployment, V1StatefulSet, V1ReplicaSet],
     kind: str,  # for some reason, obj.kind isn't populated when this function is called so we pass it in by hand
+    max_age: int = 0,
 ) -> List[V1Event]:
 
     try:
@@ -2535,7 +2547,16 @@ async def get_events_for_object(
             field_selector=f"involvedObject.name={obj.metadata.name},involvedObject.kind={kind}",
             limit=MAX_EVENTS_TO_RETRIEVE,
         )
-        return events.items if events else []
+        events = events.items if events else []
+        if max_age > 0:
+            min_timestamp = datetime.now().timestamp() - max_age
+            events = [
+                evt
+                for evt in events
+                if get_event_timestamp(evt) is None
+                or get_event_timestamp(evt) > min_timestamp
+            ]
+        return events
     except ApiException:
         return []
 

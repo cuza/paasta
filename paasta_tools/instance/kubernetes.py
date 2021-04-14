@@ -618,7 +618,8 @@ async def get_pod_status(
     )
 
     try:
-        pod_event_messages = await get_pod_event_messages(client, pod)
+        # Filter events to only last 15m
+        pod_event_messages = await get_pod_event_messages(client, pod, max_age=900)
     except asyncio.TimeoutError:
         pod_event_messages = [{"error": "Could not retrieve events"}]
 
@@ -627,10 +628,10 @@ async def get_pod_status(
         reason = sched_condition.reason
         message = sched_condition.message
 
-    if ready and backends is not None:
-        # Replace readiness with whether or not it is actually registered in the mesh
-        # TODO: Replace this once k8s readiness reflects mesh readiness, PAASTA-17266
-        ready = pod.status.pod_ip in backends
+    mesh_ready = None
+    if backends is not None:
+        # TODO: Remove this once k8s readiness reflects mesh readiness, PAASTA-17266
+        mesh_ready = pod.status.pod_ip in backends
 
     return {
         "name": pod.metadata.name,
@@ -641,6 +642,7 @@ async def get_pod_status(
         "message": message,
         "scheduled": scheduled,
         "ready": ready,
+        "mesh_ready": mesh_ready,
         "containers": await get_pod_containers(pod, client, num_tail_lines),
         "create_timestamp": pod.metadata.creation_timestamp.timestamp(),
         "delete_timestamp": delete_timestamp,
@@ -702,6 +704,7 @@ async def get_pod_containers(
         last_reason = None
         last_message = None
         last_duration = None
+        last_timestamp = None
         for state_name, this_state in last_state_dict.items():
             if this_state:
                 last_state = state_name
@@ -709,10 +712,13 @@ async def get_pod_containers(
                     last_reason = this_state["reason"]
                 if "message" in this_state:
                     last_message = this_state["message"]
-                if this_state.get("started_at") and this_state.get("finished_at"):
-                    last_duration = (
-                        this_state["finished_at"] - this_state["started_at"]
-                    ).seconds
+                if this_state.get("started_at"):
+                    if this_state.get("finished_at"):
+                        last_duration = (
+                            this_state["finished_at"] - this_state["started_at"]
+                        ).total_seconds()
+
+                    last_timestamp = this_state["started_at"]
 
         try:
             tail_lines = await get_tail_lines_for_kubernetes_container(
@@ -732,6 +738,9 @@ async def get_pod_containers(
                 "last_reason": last_reason,
                 "last_message": last_message,
                 "last_duration": last_duration,
+                "last_timestamp": last_timestamp.timestamp()
+                if last_timestamp
+                else None,
                 "timestamp": start_timestamp.timestamp() if start_timestamp else None,
                 "healthcheck_grace_period": healthcheck_grace_period,
                 "healthcheck_cmd": healthcheck,
