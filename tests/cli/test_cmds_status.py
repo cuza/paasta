@@ -1246,7 +1246,7 @@ class TestPrintKubernetesStatusV2:
         joined_output = "\n".join(output)
         assert f"State: {mock_get_instance_state.return_value}" in joined_output
         mock_get_versions_table.assert_called_once_with(
-            mock.ANY, "service", "instance", 0
+            mock.ANY, "service", "instance", "cluster", 0
         )
         for table_entry in mock_versions_table:
             assert table_entry in joined_output
@@ -1380,7 +1380,7 @@ class TestGetVersionsTable:
 
     def test_two_replicasets(self, mock_replicasets):
         versions_table = get_versions_table(
-            mock_replicasets, "service", "instance", verbose=0
+            mock_replicasets, "service", "instance", "cluster", verbose=0
         )
 
         assert "aabbccdd (new)" in versions_table[0]
@@ -1396,14 +1396,14 @@ class TestGetVersionsTable:
     def test_different_config_shas(self, mock_replicasets):
         mock_replicasets[0].config_sha = "config111"
         versions_table = get_versions_table(
-            mock_replicasets, "service", "instance", verbose=0
+            mock_replicasets, "service", "instance", "cluster", verbose=0
         )
         assert "aabbccdd, config000" in versions_table[0]
         assert "ff112233, config111" in versions_table[7]
 
     def test_full_replica_table(self, mock_replicasets):
         versions_table = get_versions_table(
-            mock_replicasets, "service", "instance", verbose=2
+            mock_replicasets, "service", "instance", "cluster", verbose=2
         )
         versions_table_tip = remove_ansi_escape_sequences(versions_table[4])
         assert "1.2.3.5" in versions_table[3]
@@ -1421,7 +1421,7 @@ class TestGetVersionsTable:
         ]
         mock_replicasets[1].pods[1].containers = [mock_bad_container]
         versions_table = get_versions_table(
-            mock_replicasets, "service", "instance", verbose=2
+            mock_replicasets, "service", "instance", "cluster", verbose=2
         )
         assert any(
             ["curl http://1.2.3.5:8888/healthcheck" in row for row in versions_table]
@@ -1440,7 +1440,7 @@ class TestGetVersionsTable:
         mock_replicasets[1].pods[0].message = "0/50 nodes matched tolerations"
 
         versions_table = get_versions_table(
-            mock_replicasets, "service", "instance", verbose=1
+            mock_replicasets, "service", "instance", "cluster", verbose=1
         )
         assert any(
             [
@@ -1457,7 +1457,7 @@ class TestGetVersionsTable:
         ]
 
         versions_table = get_versions_table(
-            mock_replicasets, "service", "instance", verbose=1
+            mock_replicasets, "service", "instance", "cluster", verbose=1
         )
         assert any(["please try again" in row for row in versions_table])
 
@@ -1471,7 +1471,7 @@ class TestGetVersionsTable:
             )
         ]
         versions_table = get_versions_table(
-            mock_replicasets, "service", "instance", verbose=1
+            mock_replicasets, "service", "instance", "cluster", verbose=1
         )
 
         assert all(["stdout 1" not in row for row in versions_table])
@@ -1484,7 +1484,7 @@ class TestGetVersionsTable:
             ]
         )
         verbose_versions_table = get_versions_table(
-            mock_replicasets, "service", "instance", verbose=2
+            mock_replicasets, "service", "instance", "cluster", verbose=2
         )
         assert any(["stdout 1" in row for row in verbose_versions_table])
         assert any(["pod event" in row for row in verbose_versions_table])
@@ -1499,7 +1499,7 @@ class TestGetVersionsTable:
         ) as mock_datetime:
             mock_datetime.now.return_value = fake_now
             versions_table = get_versions_table(
-                mock_replicasets, "service", "instance", verbose=1
+                mock_replicasets, "service", "instance", "cluster", verbose=1
             )
         assert any(
             [

@@ -619,9 +619,11 @@ async def get_pod_status(
 
     try:
         # Filter events to only last 15m
-        pod_event_messages = await get_pod_event_messages(client, pod, max_age=900)
+        pod_event_messages = await get_pod_event_messages(
+            client, pod, max_age_in_seconds=900
+        )
     except asyncio.TimeoutError:
-        pod_event_messages = [{"error": "Could not retrieve events"}]
+        pod_event_messages = [{"error": "Could not retrieve events. Please try again."}]
 
     if not scheduled:
         sched_condition = kubernetes_tools.get_pod_condition(pod, "PodScheduled")

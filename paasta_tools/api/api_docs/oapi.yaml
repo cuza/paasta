@@ -714,6 +714,9 @@ components:
           type: string
         timeStamp:
           type: string
+        error:
+          type: string
+          nullable: true
     KubernetesReplicaSet:
       properties:
         create_timestamp:

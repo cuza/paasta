@@ -1167,7 +1167,9 @@ def print_kubernetes_status_v2(
     output.extend(
         [
             f"      {line}"
-            for line in get_versions_table(status.versions, service, instance, verbose)
+            for line in get_versions_table(
+                status.versions, service, instance, cluster, verbose
+            )
         ]
     )
 
@@ -1215,12 +1217,18 @@ def get_instance_state(status: InstanceStatusKubernetesV2) -> str:
 
 
 def get_versions_table(
-    versions: List[KubernetesVersion], service: str, instance: str, verbose: int = 0,
+    versions: List[KubernetesVersion],
+    service: str,
+    instance: str,
+    cluster: str,
+    verbose: int = 0,
 ) -> List[str]:
     if len(versions) == 0:
         return [PaastaColors.red("There are no running versions for this instance")]
     elif len(versions) == 1:
-        return get_version_table_entry(versions[0], service, instance, verbose=verbose)
+        return get_version_table_entry(
+            versions[0], service, instance, cluster, verbose=verbose
+        )
     else:
         versions = sorted(versions, key=lambda x: x.create_timestamp, reverse=True)
         config_shas = {v.config_sha for v in versions}
@@ -1235,6 +1243,7 @@ def get_versions_table(
                 versions[0],
                 service,
                 instance,
+                cluster,
                 version_name_suffix="new",
                 show_config_sha=show_config_sha,
                 verbose=verbose,
@@ -1246,6 +1255,7 @@ def get_versions_table(
                     version,
                     service,
                     instance,
+                    cluster,
                     version_name_suffix="old",
                     show_config_sha=show_config_sha,
                     verbose=verbose,
@@ -1258,6 +1268,7 @@ def get_version_table_entry(
     version: KubernetesVersion,
     service: str,
     instance: str,
+    cluster: str,
     version_name_suffix: str = None,
     show_config_sha: bool = False,
     verbose: int = 0,
@@ -1293,13 +1304,13 @@ def get_version_table_entry(
             if unhealthy_replicas:
                 entry.append(f"    Unhealthy Replicas:")
                 replica_table = create_replica_table(
-                    unhealthy_replicas, service, instance, verbose
+                    unhealthy_replicas, service, instance, cluster, verbose
                 )
                 for line in replica_table:
                     entry.append(f"      {line}")
         else:
             replica_table = create_replica_table(
-                replica_states, service, instance, verbose
+                replica_states, service, instance, cluster, verbose
             )
             for line in replica_table:
                 entry.append(f"    {line}")
@@ -1391,7 +1402,7 @@ def get_replica_state(pod: KubernetesPodV2) -> ReplicaState:
             )
             if main_container.state != "running" or not pod.ready:
                 state = ReplicaState.NOT_RUNNING
-            elif pod.mesh_ready is False:  # Not registered if None
+            elif pod.mesh_ready is False and not warming_up:
                 state = ReplicaState.UNREACHABLE
             elif recent_liveness_failure(pod) or recent_container_restart(
                 main_container
@@ -1419,6 +1430,7 @@ def create_replica_table(
     pods: List[Tuple[ReplicaState, KubernetesPodV2]],
     service: str,
     instance: str,
+    cluster: str,
     verbose: int = 0,
 ) -> List[str]:
     header = ["ID", "IP/Port", "Host deployed to", "Started at what localtime", "State"]
@@ -1510,7 +1522,7 @@ def create_replica_table(
             if verbose < 2:
                 table.append(
                     PaastaColors.red(
-                        f"  Consider checking logs with `paasta logs -s {service} -i {instance} -p {pod.name}`"
+                        f"  Consider checking logs with `paasta logs -c {cluster} -s {service} -i {instance} -p {pod.name}`"
                     )
                 )
             else:
